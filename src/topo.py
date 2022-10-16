@@ -245,7 +245,7 @@ def iterate_adj_matrices(num_nodes: int, padding: int = 1) -> np.ndarray:
         seq = np.array([i for i in map(int, np.binary_repr(n, num_vals))]).reshape(
             (val_width, val_width))
         if one_in_every_row_col(seq, val_width):
-            foo = np.zeros((num_nodes, num_nodes))
+            foo = np.zeros((num_nodes, num_nodes), dtype='B')
             foo[0:val_width, padding:] = seq
             yield foo
 
@@ -323,7 +323,7 @@ def gen_graph(
     tries = 0
     while True:
         tries += 1
-        adj_matrix = rng.integers(0, 2, (num_nodes, num_nodes))
+        adj_matrix = rng.integers(0, 2, (num_nodes, num_nodes), dtype='B')
         adj_matrix[:, 0] = 0
         adj_matrix[num_nodes - 1] = 0
         for i in range(num_nodes):
