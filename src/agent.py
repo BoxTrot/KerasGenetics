@@ -50,6 +50,7 @@ If the node_type is not "sequential_functional", the attributes "config" and
 If the node_type is "sequential_functional", the attribute "contents" must exist. 
 """
 
+
 class Agent:
     def __init__(self):
         pass
@@ -65,5 +66,5 @@ def main(argv, *args):
     pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main(sys.argv))
