@@ -1,12 +1,9 @@
 import sys
-import warnings
-import numpy as np
+from copy import deepcopy
+
 import keras
-import keras.callbacks
-import keras.layers
-import keras.losses
-import keras.metrics
-import keras.utils
+
+import genome
 
 """
 The agent will contain the genome, the adjacency matrix, and exposes the interface for
@@ -52,14 +49,36 @@ If the node_type is "sequential_functional", the attribute "contents" must exist
 
 
 class Agent:
-    def __init__(self):
-        pass
+    def __init__(self, genes: genome.Genome, deep_copy=False):
+        if deep_copy:
+            self.genes = deepcopy(genes)
+        else:
+            self.genes = genes
+        self.model = keras.Model()
 
     def gen_model(self):
-        pass
+        self.model = self.genes.gen_model()
 
-    def gen_children(self):
-        pass
+    def gen_children(
+        self,
+        clones: int = 2,
+        variants: int = 2,
+        graph_mutations: int = 1,
+        num_mut_p=0.5,
+        cat_mut_p=0.05,
+        mut_power=0.01,
+        rng=None,
+    ):
+        child_genomes = self.genes.gen_children(
+            clones=clones,
+            variants=variants,
+            graph_mutations=graph_mutations,
+            num_mut_p=num_mut_p,
+            cat_mut_p=cat_mut_p,
+            mut_power=mut_power,
+            rng=rng,
+        )
+        return [Agent(g) for g in child_genomes]
 
 
 def main(argv, *args):

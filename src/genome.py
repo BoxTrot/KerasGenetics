@@ -1,19 +1,13 @@
 import sys
 import warnings
-import pickle
+from copy import deepcopy
 
-import keras
-import keras.callbacks
-import keras.layers
-import keras.losses
-import keras.metrics
-import keras.utils
 import numpy as np
+from scipy.stats import rankdata
+from tensorflow import keras
 
 import topo
-
-from copy import deepcopy
-from scipy.stats import rankdata
+import utils
 
 """
 Prototype data structure to hold the genetic material for each agent:
@@ -94,6 +88,7 @@ def warn_raise(message: str, warnlevel: int):
 
 
 class GenomeMaster:
+    # TODO: Change to use content from tf.keras.utils.serialize_keras_object
     def __init__(self, rng: np.random.Generator = None):
         if rng is None:
             global _default_rng
@@ -104,8 +99,7 @@ class GenomeMaster:
             "Dense": {
                 "units": {
                     "type": "int",
-                    "range": (0, 400),
-                    "func": lambda: self.rng.integers(0, 400, endpoint=True),
+                    "range": (0, 200),
                 },
                 "activation": {
                     "type": "categorical",
@@ -170,14 +164,12 @@ class GenomeMaster:
                 "rate": {
                     "type": "float",
                     "range": (0.0, 0.7),
-                    "func": lambda: self.rng.uniform(0.0, 0.7),
                 },
             },
             "AlphaDropout": {
                 "rate": {
                     "type": "float",
                     "range": (0.0, 0.7),
-                    "func": lambda: rng.uniform(0.0, 0.7),
                 },
             },
         }
@@ -191,9 +183,9 @@ class GenomeMaster:
                 )
             ]
         elif self.master[node_type][attr]["type"] == "int":
-            return self.master[node_type][attr]["func"]()
+            return self.rng.integers(*self.master[node_type][attr]["range"])
         elif self.master[node_type][attr]["type"] == "float":
-            return self.master[node_type][attr]["func"]()
+            return self.rng.uniform(*self.master[node_type][attr]["range"])
         else:
             raise UserWarning(
                 "value type {} of attribute {} in node type {} is unrecognised!".format(
@@ -214,9 +206,7 @@ class GenomeMaster:
         """
         if self.master[node_type][attr]["type"] == "categorical":
             raise UserWarning(
-                "Cannot generate value for categorical attribute {} in {}".format(
-                    attr, node_type
-                )
+                "Cannot generate value for categorical attribute {} in {}".format(attr, node_type)
             )
         else:
             _range = self.master[node_type][attr]["range"]
@@ -267,11 +257,6 @@ class GenomeMaster:
 
 class Genome:
     __default_genome_master = GenomeMaster()
-    with open("all_5_node_graphs.pickle", "rb") as f:
-        __all_5_node: np.ndarray = pickle.load(f)
-    with open("all_6_node_graphs.pickle", "rb") as f:
-        __all_6_node: np.ndarray = pickle.load(f)
-    del f
 
     def __init__(
         self,
@@ -300,161 +285,273 @@ class Genome:
         else:
             self.master = master
         if genes is None:
-            self._genes = [
-                {
-                    "node_type": "sequential_functional",
-                    "contents": [
-                        {
-                            "node_type": "Dense",
-                            "config": {
-                                "name": "dense_0",
-                                "trainable": True,
-                                "dtype": "float32",
-                                "units": 32,
-                                "activation": "linear",
-                                "use_bias": True,
-                                "kernel_initializer": {
-                                    "class_name": "GlorotUniform",
-                                    "config": {"seed": None},
+            # TODO: Change to use content from tf.keras.utils.serialize_keras_object
+            if adj_matrix is None or adj_matrix.shape[0] == 5:
+                self._genes = [
+                    {
+                        "node_type": "sequential_functional",
+                        "contents": [
+                            {
+                                "node_type": "Dense",
+                                "config": {
+                                    "name": "dense_0",
+                                    "trainable": True,
+                                    "dtype": "float32",
+                                    "units": 128,
+                                    "activation": "swish",
+                                    "use_bias": True,
+                                    "kernel_initializer": {
+                                        "class_name": "GlorotUniform",
+                                        "config": {"seed": None},
+                                    },
+                                    "bias_initializer": {
+                                        "class_name": "Zeros",
+                                        "config": {},
+                                    },
+                                    "kernel_regularizer": None,
+                                    "bias_regularizer": None,
+                                    "activity_regularizer": None,
+                                    "kernel_constraint": None,
+                                    "bias_constraint": None,
                                 },
-                                "bias_initializer": {
-                                    "class_name": "Zeros",
-                                    "config": {},
+                                "modifiable_params": [
+                                    "units",
+                                    "activation",
+                                    "kernel_initializer",
+                                ],
+                            },
+                            {
+                                "node_type": "Dropout",
+                                "config": {
+                                    "name": "dropout_0",
+                                    "trainable": True,
+                                    "dtype": "float32",
+                                    "rate": 0.5,
+                                    "noise_shape": None,
+                                    "seed": None,
                                 },
-                                "kernel_regularizer": None,
-                                "bias_regularizer": None,
-                                "activity_regularizer": None,
-                                "kernel_constraint": None,
-                                "bias_constraint": None,
+                                "modifiable_params": ["rate"],
                             },
-                            "modifiable_params": [
-                                "units",
-                                "activation",
-                                "kernel_initializer",
-                            ],
-                        },
-                        {
-                            "node_type": "Dropout",
-                            "config": {
-                                "name": "dropout",
-                                "trainable": True,
-                                "dtype": "float32",
-                                "rate": 0.5,
-                                "noise_shape": None,
-                                "seed": None,
-                            },
-                            "modifiable_params": ["rate"],
-                        },
-                    ],
-                },
-                {
-                    "node_type": "sequential_functional",
-                    "contents": [
-                        {
-                            "node_type": "Dense",
-                            "config": {
-                                "name": "dense_0",
-                                "trainable": True,
-                                "dtype": "float32",
-                                "units": 32,
-                                "activation": "linear",
-                                "use_bias": True,
-                                "kernel_initializer": {
-                                    "class_name": "GlorotUniform",
-                                    "config": {"seed": None},
+                        ],
+                    },
+                    {
+                        "node_type": "sequential_functional",
+                        "contents": [
+                            {
+                                "node_type": "Dense",
+                                "config": {
+                                    "name": "dense_1",
+                                    "trainable": True,
+                                    "dtype": "float32",
+                                    "units": 64,
+                                    "activation": "swish",
+                                    "use_bias": True,
+                                    "kernel_initializer": {
+                                        "class_name": "GlorotUniform",
+                                        "config": {"seed": None},
+                                    },
+                                    "bias_initializer": {
+                                        "class_name": "Zeros",
+                                        "config": {},
+                                    },
+                                    "kernel_regularizer": None,
+                                    "bias_regularizer": None,
+                                    "activity_regularizer": None,
+                                    "kernel_constraint": None,
+                                    "bias_constraint": None,
                                 },
-                                "bias_initializer": {
-                                    "class_name": "Zeros",
-                                    "config": {},
+                                "modifiable_params": [
+                                    "units",
+                                    "activation",
+                                    "kernel_initializer",
+                                ],
+                            },
+                            {
+                                "node_type": "Dropout",
+                                "config": {
+                                    "name": "dropout_1",
+                                    "trainable": True,
+                                    "dtype": "float32",
+                                    "rate": 0.5,
+                                    "noise_shape": None,
+                                    "seed": None,
                                 },
-                                "kernel_regularizer": None,
-                                "bias_regularizer": None,
-                                "activity_regularizer": None,
-                                "kernel_constraint": None,
-                                "bias_constraint": None,
+                                "modifiable_params": ["rate"],
                             },
-                            "modifiable_params": [
-                                "units",
-                                "activation",
-                                "kernel_initializer",
-                            ],
-                        },
-                        {
-                            "node_type": "Dropout",
-                            "config": {
-                                "name": "dropout",
-                                "trainable": True,
-                                "dtype": "float32",
-                                "rate": 0.5,
-                                "noise_shape": None,
-                                "seed": None,
-                            },
-                            "modifiable_params": ["rate"],
-                        },
-                    ],
-                },
-                {
-                    "node_type": "sequential_functional",
-                    "contents": [
-                        {
-                            "node_type": "Dense",
-                            "config": {
-                                "name": "dense_0",
-                                "trainable": True,
-                                "dtype": "float32",
-                                "units": 32,
-                                "activation": "linear",
-                                "use_bias": True,
-                                "kernel_initializer": {
-                                    "class_name": "GlorotUniform",
-                                    "config": {"seed": None},
+                        ],
+                    },
+                    {
+                        "node_type": "sequential_functional",
+                        "contents": [
+                            {
+                                "node_type": "Dense",
+                                "config": {
+                                    "name": "dense_2",
+                                    "trainable": True,
+                                    "dtype": "float32",
+                                    "units": 32,
+                                    "activation": "swish",
+                                    "use_bias": True,
+                                    "kernel_initializer": {
+                                        "class_name": "GlorotUniform",
+                                        "config": {"seed": None},
+                                    },
+                                    "bias_initializer": {
+                                        "class_name": "Zeros",
+                                        "config": {},
+                                    },
+                                    "kernel_regularizer": None,
+                                    "bias_regularizer": None,
+                                    "activity_regularizer": None,
+                                    "kernel_constraint": None,
+                                    "bias_constraint": None,
                                 },
-                                "bias_initializer": {
-                                    "class_name": "Zeros",
-                                    "config": {},
+                                "modifiable_params": [
+                                    "units",
+                                    "activation",
+                                    "kernel_initializer",
+                                ],
+                            },
+                            {
+                                "node_type": "Dropout",
+                                "config": {
+                                    "name": "dropout_2",
+                                    "trainable": True,
+                                    "dtype": "float32",
+                                    "rate": 0.5,
+                                    "noise_shape": None,
+                                    "seed": None,
                                 },
-                                "kernel_regularizer": None,
-                                "bias_regularizer": None,
-                                "activity_regularizer": None,
-                                "kernel_constraint": None,
-                                "bias_constraint": None,
+                                "modifiable_params": ["rate"],
                             },
-                            "modifiable_params": [
-                                "units",
-                                "activation",
-                                "kernel_initializer",
-                            ],
-                        },
-                        {
-                            "node_type": "Dropout",
-                            "config": {
-                                "name": "dropout",
-                                "trainable": True,
-                                "dtype": "float32",
-                                "rate": 0.5,
-                                "noise_shape": None,
-                                "seed": None,
+                        ],
+                    },
+                ]
+            elif adj_matrix.shape[0] > 3:
+                if adj_matrix.shape[0] < 8:
+                    self._genes = []
+                    dims = [16, 32, 64, 96, 128, 160]
+                    for i in range(adj_matrix.shape[0] - 2):
+                        self._genes.insert(
+                            0,
+                            {
+                                "node_type": "sequential_functional",
+                                "contents": [
+                                    {
+                                        "node_type": "Dense",
+                                        "config": {
+                                            "name": "dense_{}".format(adj_matrix.shape[0] - 3 - i),
+                                            "trainable": True,
+                                            "dtype": "float32",
+                                            "units": dims[i],
+                                            "activation": "swish",
+                                            "use_bias": True,
+                                            "kernel_initializer": {
+                                                "class_name": "GlorotUniform",
+                                                "config": {"seed": None},
+                                            },
+                                            "bias_initializer": {
+                                                "class_name": "Zeros",
+                                                "config": {},
+                                            },
+                                            "kernel_regularizer": None,
+                                            "bias_regularizer": None,
+                                            "activity_regularizer": None,
+                                            "kernel_constraint": None,
+                                            "bias_constraint": None,
+                                        },
+                                        "modifiable_params": [
+                                            "units",
+                                            "activation",
+                                            "kernel_initializer",
+                                        ],
+                                    },
+                                    {
+                                        "node_type": "Dropout",
+                                        "config": {
+                                            "name": "dropout_{}".format(
+                                                adj_matrix.shape[0] - 3 - i
+                                            ),
+                                            "trainable": True,
+                                            "dtype": "float32",
+                                            "rate": 0.5,
+                                            "noise_shape": None,
+                                            "seed": None,
+                                        },
+                                        "modifiable_params": ["rate"],
+                                    },
+                                ],
                             },
-                            "modifiable_params": ["rate"],
-                        },
-                    ],
-                },
-            ]
+                        )
+                else:
+                    self._genes = []
+                    for i in range(adj_matrix.shape[0] - 2):
+                        self._genes.insert(
+                            0,
+                            {
+                                "node_type": "sequential_functional",
+                                "contents": [
+                                    {
+                                        "node_type": "Dense",
+                                        "config": {
+                                            "name": "dense_{}".format(adj_matrix.shape[0] - 3 - i),
+                                            "trainable": True,
+                                            "dtype": "float32",
+                                            "units": 32,
+                                            "activation": "swish",
+                                            "use_bias": True,
+                                            "kernel_initializer": {
+                                                "class_name": "GlorotUniform",
+                                                "config": {"seed": None},
+                                            },
+                                            "bias_initializer": {
+                                                "class_name": "Zeros",
+                                                "config": {},
+                                            },
+                                            "kernel_regularizer": None,
+                                            "bias_regularizer": None,
+                                            "activity_regularizer": None,
+                                            "kernel_constraint": None,
+                                            "bias_constraint": None,
+                                        },
+                                        "modifiable_params": [
+                                            "units",
+                                            "activation",
+                                            "kernel_initializer",
+                                        ],
+                                    },
+                                    {
+                                        "node_type": "Dropout",
+                                        "config": {
+                                            "name": "dropout_{}".format(
+                                                adj_matrix.shape[0] - 3 - i
+                                            ),
+                                            "trainable": True,
+                                            "dtype": "float32",
+                                            "rate": 0.5,
+                                            "noise_shape": None,
+                                            "seed": None,
+                                        },
+                                        "modifiable_params": ["rate"],
+                                    },
+                                ],
+                            },
+                        )
+            else:
+                raise UserWarning("Adj matrix must be larger than 3!")
         else:
             if self.check_gene_integrity(genes, 1) and (
                 (adj_matrix is None) or ((len(genes) + 2) == adj_matrix.shape[0])
             ):
                 self._genes = genes
             else:
-                raise UserWarning(
-                    "input argument genes was invalid! contents: {}".format(genes)
-                )
-        self.input_layer = input_layer
-        self.output_layer = output_layer
+                raise UserWarning("input argument genes was invalid! contents: {}".format(genes))
+        self.input_layer = deepcopy(input_layer)
+        self.output_layer = deepcopy(output_layer)
         if len(self._genes) + 2 == 5:
-            self.precomp: np.ndarray = Genome.__all_5_node
+            self.precomp: np.ndarray = utils.all_5_node
         elif len(self._genes) + 2 == 6:
-            self.precomp: np.ndarray = Genome.__all_6_node
+            self.precomp: np.ndarray = utils.all_6_node
         else:
             self.precomp = None
         if adj_matrix is None:
@@ -497,9 +594,7 @@ class Genome:
                 if entry["node_type"] == "sequential_functional":
                     if "contents" in entry_keys:
                         if isinstance(entry["contents"], list):
-                            if not Genome.check_gene_integrity(
-                                entry["contents"], warnlevel
-                            ):
+                            if not Genome.check_gene_integrity(entry["contents"], warnlevel):
                                 warn_raise(
                                     'invalid entries in "content" in {}'.format(entry),
                                     warnlevel,
@@ -512,18 +607,14 @@ class Genome:
                             )
                             return False
                     else:
-                        warn_raise(
-                            '"contents" not found in {}'.format(entry), warnlevel
-                        )
+                        warn_raise('"contents" not found in {}'.format(entry), warnlevel)
                         return False
                 elif entry["node_type"] in _valid_node_types:
                     if "config" not in entry_keys:
                         warn_raise('"config" not found in {}'.format(entry), warnlevel)
                         return False
                     elif not isinstance(entry["config"], dict):
-                        warn_raise(
-                            '"config" in {} is not a dict!'.format(entry), warnlevel
-                        )
+                        warn_raise('"config" in {} is not a dict!'.format(entry), warnlevel)
                         return False
                     if "modifiable_params" not in entry_keys:
                         warn_raise(
@@ -556,17 +647,11 @@ class Genome:
         output = []
         for entry in genes:
             if entry["node_type"] == "sequential_functional":
-                content = Genome.__layers_from_genes(entry["contents"])
-                x = content[0]
-                for i in range(1, len(content)):
-                    x = content[i](x)
-                output.append(x)
+                output.append(Genome.__layers_from_genes(entry["contents"]))
             elif entry["node_type"] in _valid_node_types:
                 if _node_types[entry["node_type"]]["default"] is None:
                     output.append(
-                        _node_types[entry["node_type"]]["class"]().from_config(
-                            entry["config"]
-                        )
+                        _node_types[entry["node_type"]]["class"]().from_config(entry["config"])
                     )
                 else:
                     output.append(
@@ -591,14 +676,15 @@ class Genome:
 
     @staticmethod
     def get_order(adj_matrix: np.ndarray) -> np.ndarray:
-        return rankdata(topo.average_pos(adj_matrix, exclude_in_out=True), method="ordinal")-1
+        return rankdata(topo.average_pos(adj_matrix, exclude_in_out=True), method="ordinal") - 1
 
     def get_reordered(self, new_order: np.ndarray) -> list:
-        geneordering = np.argsort(topo.average_pos(self.adj_matrix, exclude_in_out=True), kind="stable")
+        geneordering = np.argsort(
+            topo.average_pos(self.adj_matrix, exclude_in_out=True), kind="stable"
+        )
         if len(new_order) == len(self._genes):
             ordered_genes = [
-                self._genes[i]
-                for i in geneordering
+                self._genes[i] for i in geneordering
             ]  # genes now in order of closeness to origin in graph
             new_order_genes = [ordered_genes[i] for i in new_order]
             return new_order_genes
@@ -612,6 +698,13 @@ class Genome:
 
     def reorder(self, new_order: np.ndarray):
         self._genes = self.get_reordered(new_order)
+
+    def change_matrix(self, adj_matrix: np.ndarray):
+        if topo.is_valid_adj_matrix(adj_matrix):
+            self._genes = self.get_reordered(Genome.get_order(adj_matrix))
+            self.adj_matrix = adj_matrix
+        else:
+            raise UserWarning("Invalid adj matrix!")
 
     @staticmethod
     def _gen_mutated(
@@ -650,12 +743,10 @@ class Genome:
                 for param in gene["modifiable_params"]:
                     p = rng.uniform()
                     if master.is_cat(gene["node_type"], param):
-                        if p <= cat_mut_p:
-                            gene["config"][param] = master.gen_value(
-                                gene["node_type"], param
-                            )
+                        if p < cat_mut_p:
+                            gene["config"][param] = master.gen_value(gene["node_type"], param)
                     elif master.is_num(gene["node_type"], param):
-                        if p <= num_mut_p:
+                        if p < num_mut_p:
                             gene["config"][param] = master.mutate_value(
                                 gene["node_type"], param, gene["config"][param], power
                             )
@@ -671,6 +762,7 @@ class Genome:
         clones: int = 2,
         variants: int = 2,
         graph_mutations: int = 1,
+        gr_mut_p=0.5,
         num_mut_p=0.5,
         cat_mut_p=0.05,
         mut_power=0.01,
@@ -681,6 +773,7 @@ class Genome:
         :param clones:
         :param variants:
         :param graph_mutations: How many point mutations each graph variant should have.
+        :param gr_mut_p: Probability of mutating the model topology (the graph).
         :param num_mut_p: Probability of mutating numerical values.
             Must be in the interval [0, 1].
         :param cat_mut_p: Probability of mutating categorical values.
@@ -695,40 +788,63 @@ class Genome:
                 "The clones and variants arguments must be greater than 0! Received:"
                 + " clones = {}, variants = {}".format(clones, variants)
             )
+        if rng is None:
+            rng = _default_rng
         output = []
         for i in range(clones):
             output.append(deepcopy(self))
-        variant_graphs = topo.gen_mutated(
-            arr=self.adj_matrix,
-            n=variants,
-            mutations=graph_mutations,
-            precomputed_valid=self.precomp,
-        )
-        if variant_graphs.shape[0] < variants:
-            warnings.warn(
-                "Number of graph variants is less than requested!"
-                + " Generated: {}; Requested: {}".format(
-                    variant_graphs.shape[0], variants
-                )
+
+        num_graph_variants = (rng.uniform(0, 1, variants) < gr_mut_p).sum()
+
+        if num_graph_variants > 0:
+            variant_graphs = topo.gen_mutated(
+                arr=self.adj_matrix,
+                n=num_graph_variants,
+                mutations=graph_mutations,
+                precomputed_valid=self.precomp,
             )
-        for i in range(variant_graphs.shape[0]):
+            if variant_graphs.shape[0] < num_graph_variants:
+                warnings.warn(
+                    "Number of graph variants is less than requested!"
+                    + " Generated: {}; Requested: {}".format(variant_graphs.shape[0], variants)
+                )
+            for i in range(variant_graphs.shape[0]):
+                output.append(
+                    Genome(
+                        input_layer=self.input_layer,
+                        output_layer=self.output_layer,
+                        genes=Genome._gen_mutated(
+                            genes=self.get_reordered(Genome.get_order(variant_graphs[i])),
+                            master=self.master,
+                            num_mut_p=num_mut_p,
+                            cat_mut_p=cat_mut_p,
+                            power=mut_power,
+                            rng=rng,
+                        ),
+                        adj_matrix=variant_graphs[i],
+                        adj_mat_check=False,
+                        master=self.master,
+                    )
+                )
+        for i in range(variants - num_graph_variants):
             output.append(
                 Genome(
                     input_layer=self.input_layer,
                     output_layer=self.output_layer,
                     genes=Genome._gen_mutated(
-                        genes=self.get_reordered(Genome.get_order(variant_graphs[i])),
+                        genes=self._genes,
                         master=self.master,
                         num_mut_p=num_mut_p,
                         cat_mut_p=cat_mut_p,
                         power=mut_power,
                         rng=rng,
                     ),
-                    adj_matrix=variant_graphs[i],
+                    adj_matrix=self.adj_matrix,
                     adj_mat_check=False,
                     master=self.master,
                 )
             )
+
         return output
 
 
@@ -737,16 +853,8 @@ if __name__ == "__main__":
 
     # @profile
     def main(argv, *args):
-        i = 0
-        while True:
-            foo = Genome(keras.Input(10), keras.layers.Dense(1))
-            ch: list[Genome] = foo.gen_children(num_mut_p=1.0)
-            print(i)
-            i += 1
-            for child in ch:
-                print(child.adj_matrix)
-                print(child._genes)
-            return
-
+        foo = Genome(keras.Input(10), keras.layers.Dense(1))
+        m = foo.gen_model()
+        print(m.summary())
 
     sys.exit(main(sys.argv))

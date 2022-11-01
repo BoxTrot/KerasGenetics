@@ -1,20 +1,15 @@
+import itertools
 import os
 import pickle
+import timeit
 import warnings
 from math import factorial
-import itertools
-import timeit
 
 import igraph as ig
-import keras
-import keras.callbacks
-import keras.layers
-import keras.losses
-import keras.metrics
-import keras.utils
 import matplotlib.pyplot as plt
 import numpy as np
 from numba import njit, prange
+from tensorflow import keras
 
 
 def batch_yield(it, batch=1000, raise_stop=False):
@@ -142,23 +137,17 @@ def is_valid_adj_matrix(
         return False
 
 
-def breed_adj_matrix(
-    a: np.ndarray, b: np.ndarray, precomputed_valid=None
-) -> np.ndarray:
+def breed_adj_matrix(a: np.ndarray, b: np.ndarray, precomputed_valid=None) -> np.ndarray:
     if type(precomputed_valid) is str:
         if precomputed_valid.endswith(".pickle"):
             with open(precomputed_valid, "rb") as f:
                 precomp = pickle.load(f)
                 if type(precomp) is not np.ndarray:
                     raise UserWarning(
-                        "Pickle {} did not contain a numpy ndarray".format(
-                            precomputed_valid
-                        )
+                        "Pickle {} did not contain a numpy ndarray".format(precomputed_valid)
                     )
         else:
-            raise UserWarning(
-                "unknown file extension specified in {}".format(precomputed_valid)
-            )
+            raise UserWarning("unknown file extension specified in {}".format(precomputed_valid))
     elif type(precomputed_valid) is np.ndarray:
         precomp: np.ndarray = precomputed_valid
     elif precomputed_valid is not None:
@@ -185,7 +174,7 @@ def breed_adj_matrix(
     return np.array(out)
 
 
-def average_pos(arr, in_node = 0, out_node = -1, exclude_in_out = False):
+def average_pos(arr, in_node=0, out_node=-1, exclude_in_out=False):
     n = arr.shape[0]
     _in = [i for i in range(n)][in_node]
     _out = [i for i in range(n)][out_node]
@@ -212,10 +201,7 @@ def gen_coords(n, in_node: int = 0, out_node: int = -1) -> np.ndarray:
     _in = np.arange(n)[in_node]
     _out = np.arange(n)[out_node]
     m = np.array(
-        [
-            arr.flatten()
-            for arr in np.meshgrid(np.arange(n), np.arange(n), indexing="xy")
-        ]
+        [arr.flatten() for arr in np.meshgrid(np.arange(n), np.arange(n), indexing="xy")]
     ).transpose()
     m = m[(m[:, 0] != m[:, 1])]
     m = m[(m[:, 0] != _out)]
@@ -304,15 +290,11 @@ def gen_mutated(
     else:
         num_poss = combination(width - 1, mutations)
         if num_poss < 10000:
-            combs = rng.permutation(
-                np.array(list(itertools.combinations(coords, mutations))), 0
-            )
+            combs = rng.permutation(np.array(list(itertools.combinations(coords, mutations))), 0)
             for indices_group in combs:
                 attempt = arr.copy("K")
                 for indices in indices_group:
-                    attempt[indices[0], indices[1]] = not attempt[
-                        indices[0], indices[1]
-                    ]
+                    attempt[indices[0], indices[1]] = not attempt[indices[0], indices[1]]
                 # if precomputed_valid is not None:
                 #     if True in [(i == attempt).all() for i in precomp]:
                 #         mutated.append(attempt)
@@ -330,9 +312,7 @@ def gen_mutated(
                 for indices_group in batch:
                     attempt = arr.copy("K")
                     for indices in indices_group:
-                        attempt[indices[0], indices[1]] = not attempt[
-                            indices[0], indices[1]
-                        ]
+                        attempt[indices[0], indices[1]] = not attempt[indices[0], indices[1]]
                     # if precomputed_valid is not None:
                     #     if True in [(i == attempt).all() for i in precomp]:
                     #         mutated.append(attempt)
@@ -396,8 +376,7 @@ def gen_all_graphs(
                 if gr.is_dag():
                     spaths = gr.get_all_simple_paths(in_node, out_node)
                     truths = [
-                        [i in spaths[j] for j in range(len(spaths))]
-                        for i in range(num_nodes)
+                        [i in spaths[j] for j in range(len(spaths))] for i in range(num_nodes)
                     ]
                     if False not in [True in i for i in truths]:
                         # i.e. that for each node, there is a path from the in node to the
@@ -434,9 +413,7 @@ def gen_all_graphs(
     return np.array(graphs)
 
 
-def gen_graph(
-    num_nodes: int, rng=np.random.default_rng()
-) -> tuple[np.ndarray, int, int]:
+def gen_graph(num_nodes: int, rng=np.random.default_rng()) -> np.ndarray:
     """
     Generates a random directed acyclic graph that meets the following criteria:
         - Weakly connected
@@ -461,25 +438,9 @@ def gen_graph(
         adj_matrix[num_nodes - 1] = 0
         for i in range(num_nodes):
             adj_matrix[i, i] = 0
-        outs = [(adj_matrix[i] == 0).all() for i in range(num_nodes)]
-        ins = [(adj_matrix[:, i] == 0).all() for i in range(num_nodes)]
-        # print(outs.count(True), ins.count(True))
-        if (outs.count(True) == 1) and (ins.count(True) == 1):
-            out_node = outs.index(True)
-            in_node = ins.index(True)
-            gr = ig.Graph.Adjacency(adj_matrix)
-            if gr.is_connected("weak") and gr.is_dag():
-                spaths = gr.get_all_simple_paths(in_node, out_node)
-                truths = [
-                    [i in spaths[j] for j in range(len(spaths))]
-                    for i in range(num_nodes)
-                ]
-                if False not in [True in i for i in truths]:
-                    # i.e. that for each node, there is a path from the in node to the
-                    # out node that passes through it
-                    print("Tried {} times to get this graph.".format(tries))
-                    break
-    return adj_matrix, in_node, out_node
+        if is_valid_adj_matrix(adj_matrix):
+            break
+    return adj_matrix
 
 
 def plot_graph(adj_matrix: np.ndarray, in_node: int, out_node: int):
@@ -511,6 +472,7 @@ def model_from_graph_and_configs(
     layer_configs: list[dict],
     output_config: dict,
 ):
+    # TODO: Change to use content from tf.keras.utils.serialize_keras_object
     gr: ig.Graph = ig.Graph.Adjacency(adj_matrix)
     num_nodes = gr.vcount()
     inputs = keras.Input(shape=input_shape, name="input")
@@ -519,9 +481,7 @@ def model_from_graph_and_configs(
     output_layer = keras.layers.Dense(0).from_config(output_config)
     for i in range(num_nodes - 2):
         layer_configs[i % len(layer_configs)]["name"] = "dense_{}".format(i)
-        new_layer = keras.layers.Dense(0).from_config(
-            layer_configs[i % len(layer_configs)]
-        )
+        new_layer = keras.layers.Dense(0).from_config(layer_configs[i % len(layer_configs)])
         # new_layer.name = str(i)
         layer_list.append(new_layer)
 
@@ -556,6 +516,18 @@ def model_from_graph_and_configs(
     return model
 
 
+def __apply_functional(layer_list: list, input):
+    if len(layer_list) == 0:
+        raise UserWarning("layer_list is empty!")
+    last_output = input
+    for i in range(len(layer_list)):
+        if isinstance(layer_list[i], list):
+            last_output = __apply_functional(layer_list[i], last_output)
+        else:
+            last_output = layer_list[i](last_output)
+    return last_output
+
+
 def model_from_graph_and_layers(
     adj_matrix: np.ndarray,
     in_node: int,
@@ -580,10 +552,12 @@ def model_from_graph_and_layers(
                 if len(in_inds) > 0:
                     if not (True in [vertices[ind] is None for ind in in_inds]):
                         if len(in_inds) == 1:
-                            vertices[i] = layer_list[i - 1](vertices[in_inds[0]])
+                            vertices[i] = __apply_functional(
+                                [layer_list[i - 1]], vertices[in_inds[0]]
+                            )
                         else:
                             x = keras.layers.concatenate([vertices[j] for j in in_inds])
-                            vertices[i] = layer_list[i - 1](x)
+                            vertices[i] = __apply_functional([layer_list[i - 1]], x)
 
     output_ins = adj_matrix[:, out_node].nonzero()[0].tolist()
     if len(output_ins) == 1:
@@ -604,7 +578,11 @@ def main():
     setup_2 = "\nwith open('all_6_node_graphs_isomorphs.pickle', 'rb') as f:\n    precomp = pickle.load(f)"
     stmt_2 = "for j in arrs:\n    arr_match(j, precomp)"
     print(timeit.timeit(stmt_1, setup=setup_1, globals=globals(), number=10), flush=True)
-    print(timeit.timeit(stmt_2, setup=setup_1 + setup_2, globals=globals(), number=10), flush=True)
+    print(
+        timeit.timeit(stmt_2, setup=setup_1 + setup_2, globals=globals(), number=10),
+        flush=True,
+    )
+
 
 if __name__ == "__main__":
     main()
