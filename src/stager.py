@@ -3,7 +3,7 @@ import os
 import pickle
 import sys
 import time
-from typing import TypeAlias, Union
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -22,7 +22,7 @@ reproduction.
 Use asexual reproduction with mutation
 """
 
-pandas_array: TypeAlias = Union[pd.DataFrame, pd.Series]
+pandas_array = Union[pd.DataFrame, pd.Series]
 
 __default_rng = np.random.default_rng()
 
