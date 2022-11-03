@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numba import njit, prange
 from tensorflow import keras
-
+from copy import deepcopy
 
 def batch_yield(it, batch=1000, raise_stop=False):
     out = []
@@ -532,10 +532,12 @@ def model_from_graph_and_layers(
     adj_matrix: np.ndarray,
     in_node: int,
     out_node: int,
-    input_layer,
+    input_layer: keras.layers.Layer,
     layer_list: list,
-    output_layer,
+    output_layer: keras.layers.Layer,
 ) -> keras.Model:
+    _input_layer = deepcopy(input_layer)
+    _output_layer = deepcopy(output_layer)
     gr: ig.Graph = ig.Graph.Adjacency(adj_matrix)
     num_nodes = gr.vcount()
 
@@ -544,7 +546,7 @@ def model_from_graph_and_layers(
     vertices = [
         None,
     ] * (num_nodes - 1)
-    vertices[in_node] = input_layer
+    vertices[in_node] = _input_layer
     while None in vertices:
         for i in range(1, num_nodes - 1):
             if vertices[i] is None:
@@ -552,21 +554,33 @@ def model_from_graph_and_layers(
                 if len(in_inds) > 0:
                     if not (True in [vertices[ind] is None for ind in in_inds]):
                         if len(in_inds) == 1:
-                            vertices[i] = __apply_functional(
-                                [layer_list[i - 1]], vertices[in_inds[0]]
-                            )
+                            try:
+                                vertices[i] = __apply_functional(
+                                    [layer_list[i - 1]], vertices[in_inds[0]]
+                                )
+                            except Exception as err:
+                                print(vertices[in_inds[0]])
+                                print(layer_list[i - 1])
+                                raise err
                         else:
                             x = keras.layers.concatenate([vertices[j] for j in in_inds])
                             vertices[i] = __apply_functional([layer_list[i - 1]], x)
 
     output_ins = adj_matrix[:, out_node].nonzero()[0].tolist()
     if len(output_ins) == 1:
-        output = output_layer(vertices[output_ins[0]])
+        try:
+            output = _output_layer(vertices[output_ins[0]])
+        except Exception as err:
+            print(_output_layer)
+            print(keras.utils.serialize_keras_object(_output_layer))
+            print(vertices[output_ins[0]])
+            print(keras.utils.serialize_keras_object(vertices[output_ins[0]]))
+            raise err
     else:
         z = keras.layers.concatenate([vertices[j] for j in output_ins])
-        output = output_layer(z)
+        output = _output_layer(z)
     model = keras.Model(
-        inputs=input_layer,
+        inputs=_input_layer,
         outputs=output,
     )
     return model
