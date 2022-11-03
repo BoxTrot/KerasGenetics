@@ -247,7 +247,10 @@ class Stager:
 
         fitness = np.zeros((len(pop),))
         for gen_num in range(generations):
-            print("{} Starting generation {}...".format(self.str_time(), gen_num + 1))
+            if verbose > 1:
+                print(
+                    "{} Starting generation {}...".format(self.str_time(), gen_num + 1), flush=flush
+                )
             train_tensor: tf.Tensor
             train_target: pandas_array
             val_tensor: tf.Tensor
@@ -319,7 +322,7 @@ class Stager:
                         elif int(suffix[1:]) >= 99:
                             raise UserWarning("Too many similar folders!")
                         else:
-                            suffix = "_{:0>2}".format(int(suffix[1:])+1)
+                            suffix = "_{:0>2}".format(int(suffix[1:]) + 1)
                         gen_save_path = os.path.join(save_dir, gen_folder + suffix)
                 os.makedirs(gen_save_path, exist_ok=True)
                 with open(os.path.join(gen_save_path, "arguments.json"), "x", encoding="utf8") as f:
@@ -338,7 +341,9 @@ class Stager:
                     }
                     json.dump(to_save_dict, f)
                     del to_save_dict
-                with open(os.path.join(gen_save_path, "primitives.json"), "x", encoding="utf8") as f:
+                with open(
+                    os.path.join(gen_save_path, "primitives.json"), "x", encoding="utf8"
+                ) as f:
                     to_save_dict = {
                         "gen_num": gen_num,
                         "batch_size": batch_size,
